@@ -2,6 +2,8 @@
 
 import ast
 import math
+import signal
+import sys
 from typing import Any, Dict, List, Optional
 import sympy as sp
 from sympy.parsing.latex import parse_latex
@@ -13,6 +15,7 @@ from sympy.parsing.sympy_parser import (
 
 from math_tools.guards import (
     DEFAULT_TIMEOUT_SECONDS,
+    clamp_timeout,
     run_with_timeout,
     validate_input_length,
 )
@@ -89,6 +92,68 @@ SAFE_LOCAL_DICT = {
 }
 
 
+class SymbolicBudgetExceeded(BaseException):
+    """Raised when symbolic algorithm exceeds internal allocation budget."""
+
+
+def _is_definite_numeric_integral(expr: Any) -> bool:
+    """Check if an expression contains definite integrals with numeric limits and no free symbols."""
+    if not hasattr(expr, "has") or not expr.has(sp.Integral):
+        return False
+    integrals = expr.atoms(sp.Integral)
+    for integ in integrals:
+        if not hasattr(integ, "limits") or not integ.limits:
+            return False
+        for lim in integ.limits:
+            if len(lim) != 3 or not lim[1].is_number or not lim[2].is_number:
+                return False
+        if integ.free_symbols:
+            return False
+    return True
+
+
+def _evaluate_symbolic_bounded(expr: Any, timeout_budget: float) -> Any:
+    """Attempt symbolic evaluation within an internal time budget, falling back gracefully."""
+    if not hasattr(expr, "doit") and not isinstance(expr, sp.Integral):
+        return expr
+
+    # Use ITIMER_REAL on POSIX systems to enforce internal symbolic budget
+    if sys.platform != "win32":
+        def _handler(signum, frame):
+            raise SymbolicBudgetExceeded()
+
+        budget = max(0.2, min(timeout_budget * 0.4, 1.5))
+        old_handler = signal.signal(signal.SIGALRM, _handler)
+        signal.setitimer(signal.ITIMER_REAL, budget)
+        try:
+            if isinstance(expr, sp.Integral):
+                try:
+                    res_manual = sp.integrate(expr.function, *expr.limits, manual=True)
+                    if not res_manual.has(sp.Integral):
+                        signal.setitimer(signal.ITIMER_REAL, 0)
+                        return res_manual
+                except SymbolicBudgetExceeded:
+                    raise
+                except Exception:
+                    pass
+            res = expr.doit()
+            signal.setitimer(signal.ITIMER_REAL, 0)
+            return res
+        except SymbolicBudgetExceeded:
+            signal.setitimer(signal.ITIMER_REAL, 0)
+            return expr
+        except Exception:
+            signal.setitimer(signal.ITIMER_REAL, 0)
+            return expr
+        finally:
+            signal.signal(signal.SIGALRM, old_handler)
+    else:
+        try:
+            return expr.doit()
+        except Exception:
+            return expr
+
+
 def validate_math_ast(expression_str: str) -> None:
     """Validate that an expression contains only benign mathematical syntax."""
     try:
@@ -111,11 +176,13 @@ def validate_math_ast(expression_str: str) -> None:
 def _safe_float(expr: Any, precision: int = 10) -> Optional[float]:
     """Safely convert a SymPy expression to a Python float, or None if non-real/symbolic."""
     try:
-        if not hasattr(expr, "is_number") or not expr.is_number:
-            return None
         if hasattr(expr, "is_real") and expr.is_real is False:
             return None
-        f_val = float(expr)
+        try:
+            f_val = float(expr)
+        except (TypeError, ValueError):
+            evalf_val = expr.evalf(precision) if hasattr(expr, "evalf") else expr
+            f_val = float(evalf_val)
         if math.isnan(f_val) or math.isinf(f_val):
             return None
         return round(f_val, precision) if precision > 0 else f_val
@@ -236,6 +303,7 @@ def _evaluate_latex_worker(
     precision: int,
     use_physics: bool = False,
     variables: Optional[Dict[str, Any]] = None,
+    timeout_budget: float = DEFAULT_TIMEOUT_SECONDS,
 ) -> Dict[str, Any]:
     """Core synchronous worker for LaTeX evaluation."""
     validate_input_length(latex_str)
@@ -295,13 +363,17 @@ def _evaluate_latex_worker(
 
     # Case 4: Standard mathematical expression
     subbed = parsed.subs(active_subs)
-    evaluated = subbed.doit() if hasattr(subbed, "doit") else subbed
-    simplified = sp.simplify(evaluated)
+    evaluated = _evaluate_symbolic_bounded(subbed, timeout_budget=timeout_budget)
+    simplified = sp.simplify(evaluated) if hasattr(evaluated, "simplify") else evaluated
 
     is_num = bool(simplified.is_number)
     is_rat = bool(simplified.is_rational) if is_num else False
     is_int = bool(simplified.is_integer) if is_num else False
     is_real = bool(simplified.is_real) if is_num else False
+
+    # Check for definite numeric integral fallback
+    if not is_num and _is_definite_numeric_integral(simplified):
+        is_num = True
 
     numeric_val = _safe_float(simplified, precision) if is_num else None
     free_vars = sorted([str(s) for s in simplified.free_symbols])
@@ -367,6 +439,7 @@ def _evaluate_expression_worker(
     precision: int,
     use_physics: bool = False,
     variables: Optional[Dict[str, Any]] = None,
+    timeout_budget: float = DEFAULT_TIMEOUT_SECONDS,
 ) -> Dict[str, Any]:
     """Core synchronous worker for evaluating general non-LaTeX expressions."""
     validate_input_length(expression_str)
@@ -401,13 +474,16 @@ def _evaluate_expression_worker(
             active_subs[sp.Symbol(k)] = sp.sympify(v)
 
     subbed = parsed.subs(active_subs)
-    evaluated = subbed.doit() if hasattr(subbed, "doit") else subbed
-    simplified = sp.simplify(evaluated)
+    evaluated = _evaluate_symbolic_bounded(subbed, timeout_budget=timeout_budget)
+    simplified = sp.simplify(evaluated) if hasattr(evaluated, "simplify") else evaluated
 
     is_num = bool(simplified.is_number)
     is_rat = bool(simplified.is_rational) if is_num else False
     is_int = bool(simplified.is_integer) if is_num else False
     is_real = bool(simplified.is_real) if is_num else False
+
+    if not is_num and _is_definite_numeric_integral(simplified):
+        is_num = True
 
     numeric_val = _safe_float(simplified, precision) if is_num else None
     free_vars = sorted([str(s) for s in simplified.free_symbols])
@@ -457,28 +533,32 @@ def evaluate_latex(
     precision: int = 10,
     use_physics: bool = False,
     variables: Optional[Dict[str, Any]] = None,
-    timeout: float = DEFAULT_TIMEOUT_SECONDS,
+    timeout_seconds: Optional[float] = None,
+    timeout: Optional[float] = None,
 ) -> Dict[str, Any]:
     """Evaluate a LaTeX mathematical expression with deterministic timeout."""
     validate_input_length(latex_str)
+    budget = clamp_timeout(timeout_seconds if timeout_seconds is not None else timeout)
     return run_with_timeout(
         _evaluate_latex_worker,
-        args=(latex_str, precision, use_physics, variables),
-        timeout_seconds=timeout,
+        args=(latex_str, precision, use_physics, variables, budget),
+        timeout_seconds=budget,
     )
 
 
 def solve_equation(
     equation_str: str,
     variable: Optional[str] = None,
-    timeout: float = DEFAULT_TIMEOUT_SECONDS,
+    timeout_seconds: Optional[float] = None,
+    timeout: Optional[float] = None,
 ) -> Dict[str, Any]:
     """Solve an equation deterministically with process-isolated timeout."""
     validate_input_length(equation_str)
+    budget = clamp_timeout(timeout_seconds if timeout_seconds is not None else timeout)
     return run_with_timeout(
         _solve_equation_worker,
         args=(equation_str, variable),
-        timeout_seconds=timeout,
+        timeout_seconds=budget,
     )
 
 
@@ -487,12 +567,14 @@ def evaluate_expression(
     precision: int = 10,
     use_physics: bool = False,
     variables: Optional[Dict[str, Any]] = None,
-    timeout: float = DEFAULT_TIMEOUT_SECONDS,
+    timeout_seconds: Optional[float] = None,
+    timeout: Optional[float] = None,
 ) -> Dict[str, Any]:
     """Evaluate a standard mathematical expression with deterministic timeout."""
     validate_input_length(expression_str)
+    budget = clamp_timeout(timeout_seconds if timeout_seconds is not None else timeout)
     return run_with_timeout(
         _evaluate_expression_worker,
-        args=(expression_str, precision, use_physics, variables),
-        timeout_seconds=timeout,
+        args=(expression_str, precision, use_physics, variables, budget),
+        timeout_seconds=budget,
     )

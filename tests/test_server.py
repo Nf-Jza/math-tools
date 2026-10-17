@@ -50,3 +50,19 @@ async def test_server_call_get_physics_constant():
     assert data["status"] == "success"
     assert data["numeric_value"] == 299792458.0
     assert data["unit"] == "m/s"
+
+
+@pytest.mark.anyio
+async def test_server_call_timeout_seconds():
+    res = await server.call_tool(
+        "evaluate_latex",
+        {
+            "latex": r"\int_{1}^{2} \frac{x^2-2}{(x^2+2) \sqrt{x^4+4}} \, dx",
+            "timeout_seconds": 10.0,
+        },
+    )
+    assert not res.is_error
+    data = json.loads(res.content[0].text)
+    assert data["status"] == "success"
+    assert abs(data["numeric_approximation"]) < 1e-6
+

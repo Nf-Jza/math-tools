@@ -1,7 +1,6 @@
 """FastMCP Stdio Server exposing deterministic mathematics and symbolic tools."""
 
 import json
-import sys
 from typing import Any, Dict, Optional
 from mcp.server.mcpserver import MCPServer
 
@@ -35,6 +34,7 @@ def evaluate_latex(
     precision: int = 10,
     use_physics: bool = False,
     variables: Optional[Dict[str, Any]] = None,
+    timeout_seconds: Optional[float] = None,
 ) -> str:
     """Evaluate a LaTeX expression.
 
@@ -43,6 +43,7 @@ def evaluate_latex(
         precision: Decimal precision digits for floating-point values (default 10).
         use_physics: If true, substitutes universal physical constants (c, hbar, G, k_B, alpha, etc.).
         variables: Optional mapping of variable symbols to values (e.g. {"m": 0.001}).
+        timeout_seconds: Optional execution timeout budget in seconds (default 5.0, min 0.1, max 30.0).
     """
     try:
         result = run_evaluate_latex(
@@ -50,6 +51,7 @@ def evaluate_latex(
             precision=precision,
             use_physics=use_physics,
             variables=variables,
+            timeout_seconds=timeout_seconds,
         )
         return json.dumps(result, indent=2)
     except Exception as exc:
@@ -75,6 +77,7 @@ def evaluate_expression(
     precision: int = 10,
     use_physics: bool = False,
     variables: Optional[Dict[str, Any]] = None,
+    timeout_seconds: Optional[float] = None,
 ) -> str:
     """Evaluate a standard mathematical expression.
 
@@ -83,6 +86,7 @@ def evaluate_expression(
         precision: Decimal precision digits for floating-point values (default 10).
         use_physics: If true, substitutes universal physical constants.
         variables: Optional mapping of variable symbols to values.
+        timeout_seconds: Optional execution timeout budget in seconds (default 5.0, min 0.1, max 30.0).
     """
     try:
         result = run_evaluate_expression(
@@ -90,6 +94,7 @@ def evaluate_expression(
             precision=precision,
             use_physics=use_physics,
             variables=variables,
+            timeout_seconds=timeout_seconds,
         )
         return json.dumps(result, indent=2)
     except Exception as exc:
@@ -113,15 +118,21 @@ def evaluate_expression(
 def solve_equation(
     equation: str,
     variable: Optional[str] = None,
+    timeout_seconds: Optional[float] = None,
 ) -> str:
     """Solve an equation for a variable.
 
     Args:
         equation: Algebraic equation string or LaTeX equation.
         variable: Target variable symbol to solve for (defaults to primary free symbol).
+        timeout_seconds: Optional execution timeout budget in seconds (default 5.0, min 0.1, max 30.0).
     """
     try:
-        result = run_solve_equation(equation_str=equation, variable=variable)
+        result = run_solve_equation(
+            equation_str=equation,
+            variable=variable,
+            timeout_seconds=timeout_seconds,
+        )
         return json.dumps(result, indent=2)
     except Exception as exc:
         return json.dumps(

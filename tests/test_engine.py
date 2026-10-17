@@ -103,3 +103,47 @@ def test_evaluate_expression_arithmetic():
     assert res["status"] == "success"
     assert res["exact_text"] == "2718/5"
     assert res["numeric_approximation"] == 543.6
+
+
+def test_hyperelliptic_integral_numerical_fallback():
+    # Definite integral with hyperelliptic radical where symbolic Risch spins
+    res_1_2 = evaluate_latex(
+        r"\int_{1}^{2} \frac{x^2-2}{(x^2+2) \sqrt{x^4+4}} \, dx",
+        timeout_seconds=5.0,
+    )
+    assert res_1_2["status"] == "success"
+    assert res_1_2["is_number"] is True
+    # Closed form is 1/2*acos(2/3) - 1/2*acos(2/3) = 0
+    assert abs(res_1_2["numeric_approximation"]) < 1e-6
+
+    res_0_1 = evaluate_latex(
+        r"\int_{0}^{1} \frac{x^2-2}{(x^2+2) \sqrt{x^4+4}} \, dx",
+        timeout_seconds=5.0,
+    )
+    assert res_0_1["status"] == "success"
+    assert res_0_1["is_number"] is True
+    assert abs(res_0_1["numeric_approximation"] - (-0.3648638281)) < 1e-6
+
+
+def test_inverse_trig_derivative_algebraic():
+    res = evaluate_latex(r"\frac{d}{dx} \left( \frac{1}{2} \arccos\left(\frac{2x}{x^2+2}\right) \right)")
+    assert res["status"] == "success"
+    assert "x" in res["free_variables"]
+    # Verify derivative matches algebraic form at test point x = 0.5
+    res_at_point = evaluate_latex(
+        r"\frac{d}{dx} \left( \frac{1}{2} \arccos\left(\frac{2x}{x^2+2}\right) \right)",
+        variables={"x": 0.5},
+    )
+    assert res_at_point["status"] == "success"
+    assert abs(res_at_point["numeric_approximation"] - (-0.3858858409)) < 1e-6
+
+
+def test_custom_timeout_seconds_parameter():
+    # Verify timeout_seconds operates as expected
+    with pytest.raises(Exception):
+        evaluate_expression("999999^999999", timeout_seconds=0.2)
+
+    res = evaluate_latex(r"\frac{1}{2} + \frac{1}{3}", timeout_seconds=10.0)
+    assert res["status"] == "success"
+    assert res["exact_text"] == "5/6"
+
