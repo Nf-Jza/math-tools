@@ -30,48 +30,67 @@ LLM -> Answers strictly with certified computed output
 
 ---
 
-## 🚀 Quickstart & MCP Configuration
+## 🚀 Quickstart & Installation
 
-### 1. Installation
+`math-tools` runs directly from GitHub via [`uv`](https://docs.astral.sh/uv/) without needing manual git clones or path configuration.
 
-Requires Python 3.12+ and [`uv`](https://docs.astral.sh/uv/):
+### ⚡ 1-Command Installation for AI Agents & CLIs
+
+#### Claude Code CLI:
+```bash
+claude mcp add math-tools -- uvx --from git+https://github.com/Nf-Jza/math-tools.git math-tools
+```
+
+#### Hermes Agent:
+```bash
+hermes mcp add math-tools uvx --from git+https://github.com/Nf-Jza/math-tools.git math-tools
+```
+
+---
+
+### ⚙️ Direct MCP JSON Configuration
+
+Add to your MCP settings file (works out-of-the-box in **Claude Desktop**, **Claude Code**, **Cursor**, **Windsurf**, and **VS Code**):
+
+```json
+{
+  "mcpServers": {
+    "math-tools": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/Nf-Jza/math-tools.git",
+        "math-tools"
+      ]
+    }
+  }
+}
+```
+
+*Config file locations:*
+- **Claude Desktop:** `~/.config/Claude-3p/claude_desktop_config.json` (Linux) or `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows)
+- **Claude Code CLI:** `~/.claude/settings.json`
+- **Cursor / Windsurf:** `.cursor/mcp.json` or Workspace Settings
+
+---
+
+### 🛠️ Local Development & Manual Installation
+
+For local development or testing modifications:
 
 ```bash
 git clone https://github.com/Nf-Jza/math-tools.git
 cd math-tools
 uv sync
+uv run pytest
 ```
 
-### 2. Registering in MCP Clients
-
-#### Claude Desktop (`~/.config/Claude-3p/claude_desktop_config.json` or `~/Library/Application Support/Claude/claude_desktop_config.json`):
+Local MCP configuration:
 ```json
 {
   "mcpServers": {
     "math-tools": {
-      "command": "/path/to/math-tools/.venv/bin/math-tools"
-    }
-  }
-}
-```
-
-#### Claude Code CLI (`~/.claude/settings.json`):
-```json
-{
-  "mcpServers": {
-    "math-tools": {
-      "command": "/path/to/math-tools/.venv/bin/math-tools"
-    }
-  }
-}
-```
-
-#### Hermes / Cursor (`mcp.json`):
-```json
-{
-  "mcpServers": {
-    "math-tools": {
-      "command": "/path/to/math-tools/.venv/bin/math-tools"
+      "command": "/absolute/path/to/math-tools/.venv/bin/math-tools"
     }
   }
 }
