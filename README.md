@@ -4,7 +4,16 @@
 
 ---
 
-## 🎯 The Core Problem & Solution
+## 🎯 Core Operating Principle
+
+**Never calculate in your head.** Large Language Models are statistical next-token prediction engines, not calculators. Whenever a prompt involves:
+- Arithmetic, fractions, or percentages
+- Calculus (derivatives, integrals, limits)
+- Matrix algebra or determinants
+- Algebraic equations (roots, polynomials)
+- Universal physical constants ($c, \hbar, G, k_B, \alpha$)
+
+**Delegate immediately to `math-tools` via MCP.**
 
 ```
 ❌ The Hallucination Loop (Pure LLM):
@@ -21,7 +30,173 @@ LLM -> Answers strictly with certified computed output
 
 ---
 
-## 🏗️ Architectural Overview
+## 🚀 Quickstart & MCP Configuration
+
+### 1. Installation
+
+Requires Python 3.12+ and [`uv`](https://docs.astral.sh/uv/):
+
+```bash
+git clone https://github.com/Nf-Jza/math-tools.git
+cd math-tools
+uv sync
+```
+
+### 2. Registering in MCP Clients
+
+#### Claude Desktop (`~/.config/Claude-3p/claude_desktop_config.json` or `~/Library/Application Support/Claude/claude_desktop_config.json`):
+```json
+{
+  "mcpServers": {
+    "math-tools": {
+      "command": "/path/to/math-tools/.venv/bin/math-tools"
+    }
+  }
+}
+```
+
+#### Claude Code CLI (`~/.claude/settings.json`):
+```json
+{
+  "mcpServers": {
+    "math-tools": {
+      "command": "/path/to/math-tools/.venv/bin/math-tools"
+    }
+  }
+}
+```
+
+#### Hermes / Cursor (`mcp.json`):
+```json
+{
+  "mcpServers": {
+    "math-tools": {
+      "command": "/path/to/math-tools/.venv/bin/math-tools"
+    }
+  }
+}
+```
+
+---
+
+## 🛠️ MCP Tool Reference
+
+### 1. `evaluate_latex`
+Evaluates raw LaTeX equations, integrals, derivatives, limits, summations, and matrix expressions.
+* **Arguments:**
+  * `latex` (`string`, required): Raw LaTeX formula (e.g. `\frac{3491 \times 18}{7}`, `\int_0^\pi \sin(x)dx`, `\det \begin{pmatrix} 1 & 2 \\ 3 & 4 \end{pmatrix}`).
+  * `precision` (`integer`, optional, default `10`): Decimal digits for floating-point approximation.
+  * `use_physics` (`boolean`, optional, default `false`): When `true`, automatically substitutes universal physical constants ($c, \hbar, G, k_B, \alpha, \varepsilon_0, \mu_0, m_e, m_p$).
+  * `variables` (`object`, optional): Key-value mappings for free variables (e.g. `{"m": 0.001}`).
+  * `timeout_seconds` (`number`, optional, default `5.0`): Execution timeout budget in seconds (min `0.1`, max `30.0`).
+* **Example Response:**
+  ```json
+  {
+    "status": "success",
+    "exact_latex": "\\frac{62838}{7}",
+    "exact_text": "62838/7",
+    "numeric_approximation": 8976.857142857143,
+    "is_exact_integer_or_rational": true
+  }
+  ```
+
+### 2. `evaluate_expression`
+Evaluates standard non-LaTeX arithmetic, percentages, scientific notation, and algebraic expressions safely.
+* **Arguments:**
+  * `expression` (`string`, required): Arithmetic expression (e.g. `15% of 850`, `sqrt(256) + 2^5`, `(453 * 12) / (7 + 3)`).
+  * `precision` (`integer`, optional, default `10`): Decimal digits for float approximation.
+  * `use_physics` (`boolean`, optional, default `false`): Enables physical constant substitution.
+  * `variables` (`object`, optional): Key-value mappings for free variables.
+  * `timeout_seconds` (`number`, optional, default `5.0`).
+* **Example Response:**
+  ```json
+  {
+    "status": "success",
+    "exact_text": "2718/5",
+    "numeric_approximation": 543.6,
+    "is_number": true
+  }
+  ```
+
+### 3. `solve_equation`
+Finds exact symbolic and numerical roots of algebraic equations and polynomials.
+* **Arguments:**
+  * `equation` (`string`, required): Algebraic equation or LaTeX equation (e.g. `2x + 5 = 15`, `x^2 - 5x + 6 = 0`, `\frac{x}{3} = 4`).
+  * `variable` (`string`, optional): Target variable to isolate (e.g. `"x"`). Defaults to primary symbol.
+  * `timeout_seconds` (`number`, optional, default `5.0`).
+* **Example Response:**
+  ```json
+  {
+    "status": "success",
+    "equation_latex": "x^{2} - 5 x + 6 = 0",
+    "variable_solved": "x",
+    "solutions_count": 2,
+    "solutions_latex": ["2", "3"],
+    "solutions_numeric": [2.0, 3.0]
+  }
+  ```
+
+### 4. `get_physics_constant`
+Queries exact definitions, numerical values, SI units, and authoritative CODATA/BIPM citations for universal constants.
+* **Arguments:**
+  * `symbol` (`string`, required): Constant identifier (e.g. `"c"`, `"hbar"`, `"h"`, `"G"`, `"k_B"`, `"alpha"`, `"eps_0"`, `"mu_0"`, `"m_e"`, `"m_p"`, `"N_A"`, `"R_gas"`).
+* **Example Response:**
+  ```json
+  {
+    "status": "success",
+    "symbol": "c",
+    "name": "Speed of Causality / Light in Vacuum",
+    "exact_value_text": "299792458",
+    "numeric_value": 299792458.0,
+    "unit": "m/s",
+    "category": "EXACT_SI",
+    "source": "BIPM SI Brochure (9th Edition)"
+  }
+  ```
+
+---
+
+## 🔬 Scientific Constant Epistemology & Agent Healthcheck Protocol
+
+Science progresses continuously. To prevent codebase drift without adding fragile scraping dependencies to the Python backend, the AI agent acts as the scientific auditor.
+
+### Constant Classification
+
+```
+┌────────────────────────────────────────────────────────┐
+│                   Universal Constants                  │
+└───────────────┬────────────────────────┬───────────────┘
+                │                        │
+       [Fixed by SI 2019]       [Empirical / CODATA]
+       Exact by definition      Periodic re-measurement
+       (Zero uncertainty)       (Subject to scientific updates)
+        ├── c (Speed of light)   ├── G (Gravitational constant)
+        ├── h, ℏ (Planck)        ├── α (Fine-structure constant)
+        ├── e (Elementary charge)├── m_e, m_p (Particle masses)
+        └── k_B (Boltzmann)      └── H_0, Λ (Cosmology)
+```
+
+1. **Exact SI 2019 Constants ($c, h, \hbar, k_B, e, N_A$):**
+   * Mathematically fixed by international treaty (BIPM 9th Edition). They have **zero uncertainty** and will never change.
+2. **Empirical CODATA Constants ($G, \alpha, \varepsilon_0, \mu_0, m_e, m_p$):**
+   * Experimentally determined physical constants. Periodically updated by CODATA (Committee on Data for Science and Technology) and NIST.
+
+### 🌐 Agent Verification Workflow
+
+When an agent is asked to perform mission-critical physical computations or an audit:
+1. **Do not modify inline Python code with automated scrapers.**
+2. **Consult authoritative scientific repositories:**
+   * **NIST Fundamental Physical Constants:** `https://physics.nist.gov/cuu/Constants/`
+   * **BIPM International Bureau of Weights and Measures:** `https://www.bipm.org/en/measurement-units/si-base-units`
+   * **Particle Data Group (PDG):** `https://pdg.lbl.gov`
+3. **Notify and Propose Updates:** If new CODATA adjustments or experimental values differ from `src/math_tools/physics.py`:
+   * Clearly state the newly published value, uncertainty interval, and publication date.
+   * Provide the user with the proposed diff for `src/math_tools/physics.py`.
+   * Request user confirmation before applying updates.
+
+---
+
+## 🏗️ Architecture & Internal Pipeline
 
 ```
 ┌────────────────────────────────────────────────────────┐
@@ -41,73 +216,36 @@ LLM -> Answers strictly with certified computed output
 │                           │ Clean Token String         │
 │  ┌────────────────────────▼─────────────────────────┐  │
 │  │ 2. Guardrails & Safety Boundary                  │  │
-│  │    - 5.0s hard execution timeout                 │  │
-│  │    - Zero eval() / exec() -> pure SymPy AST      │  │
-│  │    - Memory consumption limits                   │  │
+│  │    - Subprocess forkserver isolation             │  │
+│  │    - Configurable execution timeout (default 5s) │  │
+│  │    - Zero eval() / exec() -> pure AST whitelist  │  │
 │  └────────────────────────┬─────────────────────────┘  │
 │                           │ AST Tree                   │
 │  ┌────────────────────────▼─────────────────────────┐  │
 │  │ 3. Computation Engine (SymPy + ANTLR)            │  │
 │  │    - Exact Rational fractions (\frac{a}{b})      │  │
-│  │    - High-precision floating points (evalf)      │  │
+│  │    - Numerical quadrature fallback (scipy/mpmath)│  │
 │  │    - Symbolic simplification & equation solving  │  │
-│  │    - Calculus (derivatives, integrals, limits)   │  │
+│  │    - Physical constants engine                   │  │
 │  └──────────────────────────────────────────────────┘  │
 └────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 🛠️ MCP Tool Definitions
+## 🛡️ Built-in Safety & Security
 
-### 1. `evaluate_latex`
-* **Purpose:** Evaluates raw LaTeX mathematical expressions directly.
-* **Input Parameters:**
-  * `latex` (`string`, required): LaTeX formula (e.g. `\frac{3}{4} + \sqrt{144}`, `\int_0^\pi \sin(x)dx`).
-  * `precision` (`integer`, optional, default `10`): Number of decimal digits for floating-point approximation.
-* **Response Payload:**
-  ```json
-  {
-    "status": "success",
-    "exact_latex": "\\frac{51}{4}",
-    "exact_text": "51/4",
-    "numeric_approximation": 12.75,
-    "is_exact_integer_or_rational": true
-  }
-  ```
-
-### 2. `solve_equation`
-* **Purpose:** Solves algebraic equations or systems of equations deterministically.
-* **Input Parameters:**
-  * `equation` (`string`, required): Standard or LaTeX equation (e.g. `2*x + 5 = 15` or `x^2 - 4 = 0`).
-  * `variable` (`string`, optional, default `"x"`): Target variable to solve for.
-* **Response Payload:**
-  ```json
-  {
-    "status": "success",
-    "solutions_latex": ["-2", "2"],
-    "solutions_numeric": [-2.0, 2.0]
-  }
-  ```
-
-### 3. `evaluate_expression`
-* **Purpose:** Evaluates standard arithmetic, scientific notation, percentages, and algebraic expressions without LaTeX notation.
-* **Input Parameters:**
-  * `expression` (`string`, required): Arithmetic expression (e.g. `15% of 850`, `(453 * 12) / (7 + 3)`, `sqrt(256) + 2^5`).
-* **Response Payload:**
-  ```json
-  {
-    "status": "success",
-    "exact_result": "2718/5",
-    "numeric_result": 543.6
-  }
-  ```
+* **Zero `eval()` / Zero `exec()`:** Standard expressions pass through Python's Abstract Syntax Tree (`ast.parse`) validation whitelist. Any disallowed node (`Import`, `Attribute`, `Lambda`) or unauthorized function call is rejected before evaluation.
+* **Process Isolation & Circuit Breaker:** All computations run inside an isolated subprocess via Python's forkserver model. Combinatorial explosions or runaway recursions are terminated cleanly at the timeout boundary.
+* **LaTeX Control Character Auto-Repair:** JSON unescaped backslashes (`\x0c` formfeed $\to$ `\f`, `\x08` $\to$ `\b`, `\x0b` $\to$ `\v`) are repaired automatically.
+* **Structured Dual Output:** Always returns both the exact rational/symbolic form and high-precision numeric decimal approximation.
 
 ---
 
-## 🛡️ Safety & Reliability Principles
+## 🧪 Testing
 
-1. **Deterministic Sandboxing:** Absolutely no raw `eval()` or dynamic string code execution. All calculations occur via abstract syntax trees (SymPy / ANTLR parser).
-2. **Double-Backslash Resilience:** LLMs commonly drop backslashes in JSON (e.g., transmitting `\frac` as `\x0c` or raw `frac`). The ingestion gate automatically repairs and sanitizes LaTeX escape sequences.
-3. **Execution Circuit Breaker:** Any symbolic operation (such as indefinite symbolic integration or high-degree factoring) that exceeds 5.0 seconds is immediately aborted with a timeout response.
-4. **Structured Dual Output:** Always return both the **exact rational/symbolic form** (e.g., `19/4`) and the **decimal approximation** (e.g., `4.75`) so the LLM can present whichever matches user intent.
+Run the full test suite (49 unit, integration, and security stress tests):
+
+```bash
+uv run pytest
+```
