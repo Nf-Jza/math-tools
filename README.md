@@ -111,15 +111,3 @@ LLM -> Answers strictly with certified computed output
 2. **Double-Backslash Resilience:** LLMs commonly drop backslashes in JSON (e.g., transmitting `\frac` as `\x0c` or raw `frac`). The ingestion gate automatically repairs and sanitizes LaTeX escape sequences.
 3. **Execution Circuit Breaker:** Any symbolic operation (such as indefinite symbolic integration or high-degree factoring) that exceeds 5.0 seconds is immediately aborted with a timeout response.
 4. **Structured Dual Output:** Always return both the **exact rational/symbolic form** (e.g., `19/4`) and the **decimal approximation** (e.g., `4.75`) so the LLM can present whichever matches user intent.
-
----
-
-## 📋 Implementation Roadmap
-
-| Step | Milestone | Status |
-| :---: | :--- | :---: |
-| **Step 1** | Project Initialization (`uv` environment targeting Python 3.12, dependencies) | ⏳ Next |
-| **Step 2** | Core Math Engine (`engine/latex.py`, `engine/solver.py`, ANTLR parser) | ⏹️ Planned |
-| **Step 3** | Sanitizer & Timeout Circuit Breaker (`engine/sanitizer.py`, `engine/guards.py`) | ⏹️ Planned |
-| **Step 4** | MCP Server Interface (`server.py` exposing tools over stdio) | ⏹️ Planned |
-| **Step 5** | Verification & Hermes Integration (`hermes mcp add`, end-to-end tests) | ⏹️ Planned |
