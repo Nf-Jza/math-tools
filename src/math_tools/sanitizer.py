@@ -17,6 +17,20 @@ UNICODE_MATH_MAP = {
     "\u221a": r" \sqrt ",   # √
 }
 
+# Plain expressions must normalize to Python mathematical syntax, not LaTeX.
+EXPRESSION_UNICODE_MATH_MAP = {
+    **UNICODE_MATH_MAP,
+    "×": " * ",
+    "·": " * ",
+    "•": " * ",
+    "π": " pi ",
+    "∞": " oo ",
+    "≤": " <= ",
+    "≥": " >= ",
+    "≠": " != ",
+    "√": " sqrt ",
+}
+
 
 def sanitize_latex(raw_input: str) -> str:
     """Sanitize and repair LaTeX math input from LLMs.
@@ -77,8 +91,8 @@ def sanitize_latex(raw_input: str) -> str:
     for uni_char, replacement in UNICODE_MATH_MAP.items():
         text = text.replace(uni_char, replacement)
 
-    # 9. Trailing punctuation removal
-    text = re.sub(r"([)}\]\w\\])[.,;?!]+$", r"\1", text)
+    # A terminal ! is a factorial operator, not removable sentence punctuation.
+    text = re.sub(r"([)}\]\w\\!])[.,;?]+$", r"\1", text)
 
     return text.strip()
 
@@ -111,11 +125,11 @@ def sanitize_expression(raw_input: str) -> str:
         flags=re.IGNORECASE,
     )
 
-    # Trailing percentages: e.g. "25%" -> "(25 / 100)"
-    text = re.sub(r"(\d+(?:\.\d+)?)\s*%", r"(\1 / 100)", text)
+    # Trailing percentages: e.g. "25%", "25% + 10", but preserve modulo e.g. "7 % 2", "7%2"
+    text = re.sub(r"(\d+(?:\.\d+)?)\s*%(?!\s*(?:[a-zA-Z0-9_(]|\.\d))", r"(\1 / 100)", text)
 
-    # 3. Unicode replacements
-    for uni_char, replacement in UNICODE_MATH_MAP.items():
+    # 3. Normalize to plain expression syntax rather than LaTeX macros.
+    for uni_char, replacement in EXPRESSION_UNICODE_MATH_MAP.items():
         text = text.replace(uni_char, replacement)
 
     # 4. Caret exponentiation -> Python exponentiation
@@ -124,7 +138,7 @@ def sanitize_expression(raw_input: str) -> str:
     # 5. Multiply symbol cleanup: '2 * 3' or '2 x 3' -> '2 * 3'
     text = re.sub(r"(\d+)\s*[xX]\s*(\d+)", r"\1 * \2", text)
 
-    # 6. Trailing punctuation
-    text = re.sub(r"([)}\]\w])[.,;?!]+$", r"\1", text)
+    # Preserve postfix factorials, including before a sentence-ending period.
+    text = re.sub(r"([)}\]\w!])[.,;?]+$", r"\1", text)
 
     return text.strip()

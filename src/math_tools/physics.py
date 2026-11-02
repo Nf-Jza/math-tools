@@ -10,6 +10,10 @@ from typing import Any, Dict, Optional
 import sympy as sp
 
 
+# Exact SI 2019 definition: h = 6.62607015e-34 J*s.
+PLANCK_CONSTANT = sp.Rational(662607015, 10**42)
+
+
 @dataclass(frozen=True)
 class PhysicalConstant:
     symbol: str
@@ -40,7 +44,7 @@ CONSTANTS_CATALOG: Dict[str, PhysicalConstant] = {
         symbol="hbar",
         latex=r"\hbar",
         name="Reduced Planck Constant (Dirac's h-bar)",
-        value=sp.Rational(662607015, 10**43) / (2 * sp.pi),
+        value=PLANCK_CONSTANT / (2 * sp.pi),
         unit="J*s",
         category="EXACT_SI",
         source="BIPM / SI Definition 2019 (h / 2*pi)",
@@ -51,7 +55,7 @@ CONSTANTS_CATALOG: Dict[str, PhysicalConstant] = {
         symbol="h",
         latex=r"h",
         name="Planck Constant",
-        value=sp.Rational(662607015, 10**42),
+        value=PLANCK_CONSTANT,
         unit="J*s",
         category="EXACT_SI",
         source="BIPM SI Definition 2019 (6.62607015e-34 J*s)",
@@ -90,11 +94,13 @@ CONSTANTS_CATALOG: Dict[str, PhysicalConstant] = {
         description="Conversion factor between temperature and microstate entropy.",
     ),
     # 5. Fine-Structure Constant (Empirical - CODATA 2022)
+    # https://physics.nist.gov/cgi-bin/cuu/Value?alphinv
+    # Inverse alpha = 137.035999177; standard uncertainty 0.000000021.
     "alpha": PhysicalConstant(
         symbol="alpha",
         latex=r"\alpha",
         name="Fine-Structure Constant",
-        value=sp.Rational(1, 1) / sp.Float("137.035999084"),
+        value=sp.Rational(1, 1) / sp.Float("137.035999177"),
         unit="dimensionless",
         category="EMPIRICAL_CODATA",
         source="CODATA 2022 (NIST)",
@@ -112,44 +118,48 @@ CONSTANTS_CATALOG: Dict[str, PhysicalConstant] = {
         description="Electric charge carried by a single proton/electron.",
     ),
     # Vacuum Permittivity (Electric Constant - Derived / Empirical CODATA 2022)
+    # https://physics.nist.gov/cgi-bin/cuu/Value?ep0 (standard uncertainty 1.4e-21 F/m).
     "eps_0": PhysicalConstant(
         symbol="eps_0",
         latex=r"\varepsilon_0",
         name="Vacuum Permittivity / Electric Constant",
-        value=sp.Float("8.8541878128e-12"),
+        value=sp.Float("8.8541878188e-12"),
         unit="F/m",
         category="EMPIRICAL_CODATA",
         source="CODATA 2022 (NIST)",
         description="Capability of vacuum to permit electric field lines.",
     ),
     # Vacuum Permeability (Magnetic Constant - Derived / Empirical CODATA 2022)
+    # https://physics.nist.gov/cgi-bin/cuu/Value?mu0 (standard uncertainty 2.0e-16 N/A^2).
     "mu_0": PhysicalConstant(
         symbol="mu_0",
         latex=r"\mu_0",
         name="Vacuum Permeability / Magnetic Constant",
-        value=sp.Float("1.25663706212e-6"),
+        value=sp.Float("1.25663706127e-6"),
         unit="N/A^2",
         category="EMPIRICAL_CODATA",
         source="CODATA 2022 (NIST)",
         description="Capability of vacuum to support magnetic field lines.",
     ),
     # Electron Rest Mass (CODATA 2022)
+    # https://physics.nist.gov/cgi-bin/cuu/Value?me (standard uncertainty 2.8e-40 kg).
     "m_e": PhysicalConstant(
         symbol="m_e",
         latex=r"m_e",
         name="Electron Rest Mass",
-        value=sp.Float("9.1093837015e-31"),
+        value=sp.Float("9.1093837139e-31"),
         unit="kg",
         category="EMPIRICAL_CODATA",
         source="CODATA 2022 (NIST)",
         description="Rest mass of an electron.",
     ),
     # Proton Rest Mass (CODATA 2022)
+    # https://physics.nist.gov/cgi-bin/cuu/Value?mp (standard uncertainty 5.2e-37 kg).
     "m_p": PhysicalConstant(
         symbol="m_p",
         latex=r"m_p",
         name="Proton Rest Mass",
-        value=sp.Float("1.67262192369e-27"),
+        value=sp.Float("1.67262192595e-27"),
         unit="kg",
         category="EMPIRICAL_CODATA",
         source="CODATA 2022 (NIST)",

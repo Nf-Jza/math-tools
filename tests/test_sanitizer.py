@@ -49,3 +49,29 @@ def test_sanitize_expression():
     assert sanitize_expression("2^8") == "2**8"
     assert sanitize_expression("10 x 5") == "10 * 5"
     assert sanitize_expression("12 * 4.") == "12 * 4"
+
+
+def test_terminal_factorials_are_not_sentence_punctuation():
+    for sanitize in (sanitize_expression, sanitize_latex):
+        assert sanitize("5!") == "5!"
+        assert sanitize("3 + 5!") == "3 + 5!"
+        assert sanitize("5!!") == "5!!"
+        assert sanitize("5!.") == "5!"
+        assert sanitize("(3 + 2)!") == "(3 + 2)!"
+
+
+def test_plain_unicode_does_not_become_latex():
+    assert sanitize_expression("3 × 4") == "3  *  4"
+    assert sanitize_expression("3 · 4") == "3  *  4"
+    assert sanitize_expression("π / 2") == "pi  / 2"
+    assert sanitize_expression("5 − 3") == "5 - 3"
+
+
+def test_modulo_operator_is_preserved_not_converted_to_percentage():
+    assert sanitize_expression("7 % 2") == "7 % 2"
+    assert sanitize_expression("7%2") == "7%2"
+    assert sanitize_expression("7//2 + 7%2") == "7//2 + 7%2"
+    assert sanitize_expression("7 % (2 + 1)") == "7 % (2 + 1)"
+    assert sanitize_expression("25%") == "(25 / 100)"
+    assert sanitize_expression("25% + 10%") == "(25 / 100) + (10 / 100)"
+    assert sanitize_expression("50% * 2") == "(50 / 100) * 2"

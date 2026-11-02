@@ -1,6 +1,6 @@
 # 🧮 Math-Tools MCP: Deterministic LLM Math & Symbolic Engine
 
-> **Mission:** Completely eliminate Large Language Model mathematical hallucinations by shifting the agent from statistical token prediction to **guaranteed deterministic computation**.
+> **Mission:** Reduce arithmetic and symbolic-computation errors by delegating calculations to a deterministic SymPy backend. Correct results still depend on the supplied formula, parsing, assumptions, and reference data; deterministic execution is not a proof of end-to-end correctness.
 
 ---
 
@@ -25,7 +25,7 @@ User: "What is \frac{3491 \times 18}{7}?"
 LLM -> Calls evaluate_latex(latex="\frac{3491 \times 18}{7}")
 Engine -> SymPy / ANTLR AST deterministic evaluation
 Engine -> Returns Exact: 62838/7 | Numeric: 8976.857142857143
-LLM -> Answers strictly with certified computed output
+LLM -> Reports the computed result and checks its interpretation
 ```
 
 ---
@@ -50,7 +50,7 @@ hermes mcp add math-tools uvx --from git+https://github.com/Nf-Jza/math-tools.gi
 
 ### ⚙️ Direct MCP JSON Configuration
 
-Add to your MCP settings file (works out-of-the-box in **Claude Desktop**, **Claude Code**, **Cursor**, **Windsurf**, and **VS Code**):
+Clients such as **Claude Desktop**, **Claude Code**, **Cursor**, **Windsurf**, and **VS Code** can launch the stdio server. The following is an `mcpServers`-style configuration; adapt its wrapper to your client's schema:
 
 ```json
 {
@@ -69,8 +69,8 @@ Add to your MCP settings file (works out-of-the-box in **Claude Desktop**, **Cla
 
 *Config file locations:*
 - **Claude Desktop:** `~/.config/Claude-3p/claude_desktop_config.json` (Linux) or `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows)
-- **Claude Code CLI:** `~/.claude/settings.json`
-- **Cursor / Windsurf:** `.cursor/mcp.json` or Workspace Settings
+- **Claude Code CLI:** Prefer `claude mcp add` above; use a project-root `.mcp.json` for shared project configuration.
+- **Other clients:** Use the client's MCP settings UI or documented configuration file; locations differ between Cursor, Windsurf, and VS Code.
 
 ---
 
@@ -85,7 +85,7 @@ uv sync
 uv run pytest
 ```
 
-Local MCP configuration:
+Local MCP configuration (on Windows, use the executable at `.venv\\Scripts\\math-tools.exe` instead):
 ```json
 {
   "mcpServers": {
@@ -104,9 +104,9 @@ Local MCP configuration:
 Evaluates raw LaTeX equations, integrals, derivatives, limits, summations, and matrix expressions.
 * **Arguments:**
   * `latex` (`string`, required): Raw LaTeX formula (e.g. `\frac{3491 \times 18}{7}`, `\int_0^\pi \sin(x)dx`, `\det \begin{pmatrix} 1 & 2 \\ 3 & 4 \end{pmatrix}`).
-  * `precision` (`integer`, optional, default `10`): Decimal digits for floating-point approximation.
+  * `precision` (`integer`, optional, default `10`, range `1`–`100`): Significant digits for `numeric_decimal`. The convenience float keeps legacy decimal-place rounding at ordinary magnitudes and significant digits for very small values.
   * `use_physics` (`boolean`, optional, default `false`): When `true`, automatically substitutes universal physical constants ($c, \hbar, G, k_B, \alpha, \varepsilon_0, \mu_0, m_e, m_p$).
-  * `variables` (`object`, optional): Key-value mappings for free variables (e.g. `{"m": 0.001}`).
+  * `variables` (`object`, optional): Up to 64 public ASCII names mapped to finite real numbers or bounded decimal/scientific/rational literals (e.g. `{"m": 0.001}`, `{"x": "1/3"}`). Names cannot shadow mathematical functions or constants; symbolic code strings are rejected.
   * `timeout_seconds` (`number`, optional, default `5.0`): Execution timeout budget in seconds (min `0.1`, max `30.0`).
 * **Example Response:**
   ```json
@@ -114,8 +114,8 @@ Evaluates raw LaTeX equations, integrals, derivatives, limits, summations, and m
     "status": "success",
     "exact_latex": "\\frac{62838}{7}",
     "exact_text": "62838/7",
-    "numeric_approximation": 8976.857142857143,
-    "is_exact_integer_or_rational": true
+    "numeric_approximation": 8976.8571428571,
+    "is_rational": true
   }
   ```
 
@@ -123,9 +123,9 @@ Evaluates raw LaTeX equations, integrals, derivatives, limits, summations, and m
 Evaluates standard non-LaTeX arithmetic, percentages, scientific notation, and algebraic expressions safely.
 * **Arguments:**
   * `expression` (`string`, required): Arithmetic expression (e.g. `15% of 850`, `sqrt(256) + 2^5`, `(453 * 12) / (7 + 3)`).
-  * `precision` (`integer`, optional, default `10`): Decimal digits for float approximation.
+  * `precision` (`integer`, optional, default `10`, range `1`–`100`): Significant digits for `numeric_decimal`; `numeric_approximation` remains a machine-precision convenience float.
   * `use_physics` (`boolean`, optional, default `false`): Enables physical constant substitution.
-  * `variables` (`object`, optional): Key-value mappings for free variables.
+  * `variables` (`object`, optional): Same validated finite-numeric mapping as `evaluate_latex`; symbolic expression strings are not accepted.
   * `timeout_seconds` (`number`, optional, default `5.0`).
 * **Example Response:**
   ```json
@@ -137,8 +137,12 @@ Evaluates standard non-LaTeX arithmetic, percentages, scientific notation, and a
   }
   ```
 
+**Numeric output contract:** `numeric_approximation` is a JSON number, so it is limited to machine-float range and precision. `numeric_decimal` is a significant-digit decimal/scientific string evaluated by SymPy; use it for high precision, very small values, or values beyond the float range. Either may be `null` when no finite real approximation is available. Exact rational and symbolic text is retained separately. Decimal literals in plain expressions are interpreted exactly; JSON floating-point substitutions have already been rounded by the client and cannot regain lost precision.
+
+Matrix results use JSON-safe `matrix_data`: small exact integers are JSON numbers, while rational, symbolic, and large-integer cells are strings. This avoids silently converting exact fractions to floats. `determinant` and `trace` are convenience floats when finite and real.
+
 ### 3. `solve_equation`
-Finds exact symbolic and numerical roots of algebraic equations and polynomials.
+Finds exact symbolic and numerical roots of algebraic equations and polynomials. Identity/constant-equation responses distinguish `is_identity` from `is_contradiction`; an identity's empty root list does not mean that no values satisfy it.
 * **Arguments:**
   * `equation` (`string`, required): Algebraic equation or LaTeX equation (e.g. `2x + 5 = 15`, `x^2 - 5x + 6 = 0`, `\frac{x}{3} = 4`).
   * `variable` (`string`, optional): Target variable to isolate (e.g. `"x"`). Defaults to primary symbol.
@@ -192,11 +196,11 @@ Science progresses continuously. To prevent codebase drift without adding fragil
         ├── c (Speed of light)   ├── G (Gravitational constant)
         ├── h, ℏ (Planck)        ├── α (Fine-structure constant)
         ├── e (Elementary charge)├── m_e, m_p (Particle masses)
-        └── k_B (Boltzmann)      └── H_0, Λ (Cosmology)
+        └── k_B (Boltzmann)      └── ε_0, μ_0 (Vacuum)
 ```
 
 1. **Exact SI 2019 Constants ($c, h, \hbar, k_B, e, N_A$):**
-   * Mathematically fixed by international treaty (BIPM 9th Edition). They have **zero uncertainty** and will never change.
+   * Defining SI values, or exact mathematical relations derived from them (such as $\hbar = h/(2\pi)$), under the current SI definitions. They have **zero definitional uncertainty**; the implementation still requires accurate transcription and regression tests.
 2. **Empirical CODATA Constants ($G, \alpha, \varepsilon_0, \mu_0, m_e, m_p$):**
    * Experimentally determined physical constants. Periodically updated by CODATA (Committee on Data for Science and Technology) and NIST.
 
@@ -230,22 +234,22 @@ When an agent is asked to perform mission-critical physical computations or an a
 │  │ 1. Sanitization & Escaping Gate                  │  │
 │  │    - Strip $ / $$ math delimiters                │  │
 │  │    - Auto-heal single-escaped backslashes        │  │
-│  │    - Strict regex input pre-validation           │  │
+│  │    - Mathematical input normalization           │  │
 │  └────────────────────────┬─────────────────────────┘  │
 │                           │ Clean Token String         │
 │  ┌────────────────────────▼─────────────────────────┐  │
 │  │ 2. Guardrails & Safety Boundary                  │  │
-│  │    - Subprocess forkserver isolation             │  │
+│  │    - forkserver / Windows spawn workers         │  │
 │  │    - Configurable execution timeout (default 5s) │  │
-│  │    - Zero eval() / exec() -> pure AST whitelist  │  │
+│  │    - Explicit plain-expression AST evaluation   │  │
 │  └────────────────────────┬─────────────────────────┘  │
 │                           │ AST Tree                   │
 │  ┌────────────────────────▼─────────────────────────┐  │
 │  │ 3. Computation Engine (SymPy + ANTLR)            │  │
 │  │    - Exact Rational fractions (\frac{a}{b})      │  │
-│  │    - Numerical quadrature fallback (scipy/mpmath)│  │
+│  │    - Numerical evaluation via SymPy/mpmath      │  │
 │  │    - Symbolic simplification & equation solving  │  │
-│  │    - Physical constants engine                   │  │
+│  │    - Physical constants registry                 │  │
 │  └──────────────────────────────────────────────────┘  │
 └────────────────────────────────────────────────────────┘
 ```
@@ -254,17 +258,21 @@ When an agent is asked to perform mission-critical physical computations or an a
 
 ## 🛡️ Built-in Safety & Security
 
-* **Zero `eval()` / Zero `exec()`:** Standard expressions pass through Python's Abstract Syntax Tree (`ast.parse`) validation whitelist. Any disallowed node (`Import`, `Attribute`, `Lambda`) or unauthorized function call is rejected before evaluation.
-* **Process Isolation & Circuit Breaker:** All computations run inside an isolated subprocess via Python's forkserver model. Combinatorial explosions or runaway recursions are terminated cleanly at the timeout boundary.
-* **LaTeX Control Character Auto-Repair:** JSON unescaped backslashes (`\x0c` formfeed $\to$ `\f`, `\x08` $\to$ `\b`, `\x0b` $\to$ `\v`) are repaired automatically.
-* **Structured Dual Output:** Always returns both the exact rational/symbolic form and high-precision numeric decimal approximation.
+* **Explicit mathematical parsing:** Plain expressions and equation fallbacks use a whitelisted AST evaluator. Variable substitutions are restricted to validated finite numeric values; arbitrary Python strings are not evaluated as substitution code. LaTeX uses strict parser backends rather than silently accepting an incomplete prefix.
+* **Worker circuit breaker:** Computations run in a separate process (`forkserver` where supported, `spawn` on Windows) with a bounded response wait. Results are drained over a one-way pipe while the worker is running, before joining it. Startup and cleanup add overhead; this is not a real-time scheduling guarantee.
+* **Not an OS sandbox:** Workers retain the server account's privileges. No filesystem/network isolation or memory quota is provided. Use an OS-level sandbox and a least-privilege account for untrusted workloads; timeouts do not bound peak memory allocation.
+* **LaTeX control-character repair:** Common incorrectly escaped LaTeX control characters are repaired. Normalization preserves factorial operators; malformed or unsupported syntax is rejected rather than guaranteed to be repairable.
+* **Result representations:** Scalar responses preserve the symbolic expression and provide a machine-float approximation when available. Numerical evaluation is approximate, and exact-looking text containing measured constants is not an exact physical measurement. Boolean, equation, and matrix results have their own response fields.
+* **Physics scope:** The catalog supplies SI values and CODATA reference metadata. Units are labels, not dimensional constraints, and measurement uncertainties are not propagated through formulas.
 
 ---
 
 ## 🧪 Testing
 
-Run the full test suite (49 unit, integration, and security stress tests):
+Run the full unit, integration, security-rejection, and regression suite:
 
 ```bash
 uv run pytest
 ```
+
+CI runs the locked environment on Windows and Ubuntu with Python 3.12, 3.13, and 3.14. Successful local tests do not establish that every symbolic expression will terminate or that every physical formula is valid.

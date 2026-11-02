@@ -1,4 +1,4 @@
-"""FastMCP Stdio Server exposing deterministic mathematics and symbolic tools."""
+"""MCP stdio server exposing mathematical and symbolic tools."""
 
 import json
 from typing import Any, Dict, Optional
@@ -40,9 +40,9 @@ def evaluate_latex(
 
     Args:
         latex: Raw LaTeX math formula (e.g. r"\\frac{3}{4} + \\sqrt{16}", r"\\int_0^\\pi \\sin(x)dx").
-        precision: Decimal precision digits for floating-point values (default 10).
+        precision: Significant digits for numeric_decimal, from 1 to 100 (default 10).
         use_physics: If true, substitutes universal physical constants (c, hbar, G, k_B, alpha, etc.).
-        variables: Optional mapping of variable symbols to values (e.g. {"m": 0.001}).
+        variables: Up to 64 named finite numeric values; arbitrary symbolic code is rejected.
         timeout_seconds: Optional execution timeout budget in seconds (default 5.0, min 0.1, max 30.0).
     """
     try:
@@ -83,9 +83,9 @@ def evaluate_expression(
 
     Args:
         expression: Mathematical expression string.
-        precision: Decimal precision digits for floating-point values (default 10).
+        precision: Significant digits for numeric_decimal, from 1 to 100 (default 10).
         use_physics: If true, substitutes universal physical constants.
-        variables: Optional mapping of variable symbols to values.
+        variables: Up to 64 named finite numeric values; arbitrary symbolic code is rejected.
         timeout_seconds: Optional execution timeout budget in seconds (default 5.0, min 0.1, max 30.0).
     """
     try:
